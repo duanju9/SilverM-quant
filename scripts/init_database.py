@@ -628,6 +628,7 @@ def init_database(db_path, source_db_path=None):
             conn.execute(sql)
         for view_name, view_sql in VIEW_DEFINITIONS.items():
             conn.execute(view_sql)
+        conn.commit()
         if source_db_path:
             source_db_path = Path(source_db_path)
             if source_db_path.exists():
