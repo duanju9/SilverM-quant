@@ -1,5 +1,11 @@
 # 回测冒烟（ETL 同步日线后）
 
+在已全量或部分 ETL 且（可选）已 `--sync-dwd-daily` 后，可先跑 **不依赖策略文件** 的库读检查：
+
+```bash
+python tools/miniqmt_etl/smoke_duckdb_read.py
+```
+
 `run_backtest.py` 从 `dwd_daily_price` 读数（见 `backtest/strategy_backtest/run_backtest.py`）。在已执行：
 
 ```bash
