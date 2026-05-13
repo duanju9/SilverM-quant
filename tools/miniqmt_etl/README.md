@@ -18,19 +18,20 @@ python scripts/init_database.py --db data/Astock3.duckdb
 ## ETL
 
 ```bash
-# 默认读 ../Vnpy_Yue/.../miniqmt.sqlite，写入 data/Astock3.duckdb
-python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py --limit-rows 200000
+# 默认读 ../Vnpy_Yue/.../miniqmt.sqlite，写入 data/Astock3.duckdb（分块 35 万行/批，防内存爆）
+python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py
 
-# 显式路径
+# 显式路径 + 日线同步到 dwd_daily_price（需已 init_database）
 python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py ^
   --sqlite D:\Vnpy\Vnpy_Yue\examples\miniqmt_research\data\miniqmt.sqlite ^
-  --duckdb D:\Vnpy\SilverM-quant\data\Astock3.duckdb
+  --duckdb D:\Vnpy\SilverM-quant\data\Astock3.duckdb ^
+  --sync-dwd-daily
 
-# 仅日线 + 同步到 dwd_daily_price（需已 init）
-python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py --periods 1d --sync-dwd-daily
+# 仅日线子集调试
+python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py --periods 1d --limit-rows 100000
 ```
 
-环境变量：`MINIQMT_SQLITE_PATH`、`SILVERM_DUCKDB`。
+环境变量：`MINIQMT_SQLITE_PATH`、`SILVERM_DUCKDB`。可选 `--chunk-rows 0` 强制一次性读入（**仅小库**）。
 
 ## 校验
 
@@ -45,6 +46,12 @@ python tools/miniqmt_etl/validate_miniqmt_etl.py --sqlite "D:\Vnpy\Vnpy_Yue\exam
 ```bash
 set VNPY_YUE_STRATEGY_V4=D:\Vnpy\Vnpy_Yue\examples\miniqmt_live\strategy_v4
 python tools/miniqmt_etl/v4_entry_probe.py --code 000001.SZ
+```
+
+## DuckDB 只读冒烟（不依赖策略 py / pytest）
+
+```bash
+python tools/miniqmt_etl/smoke_duckdb_read.py
 ```
 
 ## 文档

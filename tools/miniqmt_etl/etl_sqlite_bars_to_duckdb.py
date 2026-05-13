@@ -39,25 +39,28 @@ def _default_duckdb() -> Path:
     return (PROJECT_ROOT / "data" / "Astock3.duckdb").resolve()
 
 
-def ensure_bars_compat(conn: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> None:
-    conn.execute("DROP TABLE IF EXISTS bars_compat")
+_SELECT_CAST = """
+SELECT
+  CAST(period AS VARCHAR) AS period,
+  CAST(code AS VARCHAR) AS code,
+  CAST(ts AS VARCHAR) AS ts,
+  CAST(open AS DOUBLE) AS open,
+  CAST(high AS DOUBLE) AS high,
+  CAST(low AS DOUBLE) AS low,
+  CAST(close AS DOUBLE) AS close,
+  CAST(volume AS DOUBLE) AS volume,
+  CAST(amount AS DOUBLE) AS amount
+FROM _bars_df
+"""
+
+
+def _write_chunk(conn: duckdb.DuckDBPyConnection, df: pd.DataFrame, *, first: bool) -> None:
     conn.register("_bars_df", df)
-    conn.execute(
-        """
-        CREATE TABLE bars_compat AS
-        SELECT
-          CAST(period AS VARCHAR) AS period,
-          CAST(code AS VARCHAR) AS code,
-          CAST(ts AS VARCHAR) AS ts,
-          CAST(open AS DOUBLE) AS open,
-          CAST(high AS DOUBLE) AS high,
-          CAST(low AS DOUBLE) AS low,
-          CAST(close AS DOUBLE) AS close,
-          CAST(volume AS DOUBLE) AS volume,
-          CAST(amount AS DOUBLE) AS amount
-        FROM _bars_df
-        """
-    )
+    if first:
+        conn.execute("DROP TABLE IF EXISTS bars_compat")
+        conn.execute(f"CREATE TABLE bars_compat AS {_SELECT_CAST}")
+    else:
+        conn.execute(f"INSERT INTO bars_compat {_SELECT_CAST}")
     conn.unregister("_bars_df")
 
 
@@ -103,6 +106,12 @@ def main() -> int:
     ap.add_argument("--duckdb", type=Path, default=None, help="目标 .duckdb 路径")
     ap.add_argument("--periods", default="", help="逗号分隔仅导入 period，如 1d,5m；空为全部")
     ap.add_argument("--limit-rows", type=int, default=0, help="最多导入行数，0 表示不限制（全量可能很大）")
+    ap.add_argument(
+        "--chunk-rows",
+        type=int,
+        default=350_000,
+        help="pandas 分块读 SQLite 行数，避免全表进内存；<=0 则一次性读取（小库可用，大库易 OOM）",
+    )
     ap.add_argument("--sync-dwd-daily", action="store_true", help="将 1d 写入 dwd_daily_price（需已 init 库表）")
     args = ap.parse_args()
 
@@ -127,26 +136,41 @@ def main() -> int:
     if args.limit_rows and args.limit_rows > 0:
         lim_sql = f"LIMIT {int(args.limit_rows)}"
 
-    sq = sqlite3.connect(str(sqlite_path))
-    try:
-        q = f"SELECT period, code, ts, open, high, low, close, volume, amount FROM bars WHERE {where} {lim_sql}"
-        df = pd.read_sql_query(q, sq, params=params or [])
-    finally:
-        sq.close()
-
-    if df.empty:
-        print("[etl] 无数据行，请检查 period 过滤或 sqlite 是否为空", file=sys.stderr)
-        return 3
+    q = f"SELECT period, code, ts, open, high, low, close, volume, amount FROM bars WHERE {where} {lim_sql}"
 
     con = duckdb.connect(str(duckdb_path))
+    sq = sqlite3.connect(str(sqlite_path))
     try:
-        ensure_bars_compat(con, df)
+        total_written = 0
+        first = True
+        chunk_size = int(args.chunk_rows)
+        if chunk_size <= 0:
+            df = pd.read_sql_query(q, sq, params=params or [])
+            if df.empty:
+                print("[etl] 无数据行，请检查 period 过滤或 sqlite 是否为空", file=sys.stderr)
+                return 3
+            _write_chunk(con, df, first=True)
+            total_written = len(df)
+        else:
+            reader = pd.read_sql_query(q, sq, chunksize=chunk_size, params=params or [])
+            for i, chunk in enumerate(reader):
+                if chunk.empty:
+                    continue
+                _write_chunk(con, chunk, first=first)
+                first = False
+                total_written += len(chunk)
+                if (i + 1) % 20 == 0:
+                    print(f"[etl] chunks... rows_so_far={total_written}", flush=True)
+            if total_written == 0:
+                print("[etl] 无数据行，请检查 period 过滤或 sqlite 是否为空", file=sys.stderr)
+                return 3
         n = con.execute("SELECT count(*) FROM bars_compat").fetchone()[0]
-        print(f"[etl] bars_compat rows={n} duckdb={duckdb_path}")
+        print(f"[etl] bars_compat rows={n} duckdb={duckdb_path} (written={total_written})")
         if args.sync_dwd_daily:
             m = sync_dwd_daily_price(con)
             print(f"[etl] dwd_daily_price rows (data_source=miniqmt_sqlite)={m}")
     finally:
+        sq.close()
         con.close()
     return 0
 

@@ -26,3 +26,5 @@ GitHub 网页上也可用 **Sync fork**（与上游分支对齐时）。
 ```bash
 git push -u origin main
 ```
+
+就绪自检清单：[GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md)。

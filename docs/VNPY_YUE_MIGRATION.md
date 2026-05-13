@@ -18,7 +18,7 @@
 ## 推荐执行顺序
 
 1. `python scripts/init_database.py --db data/Astock3.duckdb`（若需 `dwd_daily_price` / 回测读该表）
-2. `python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py`（大库建议先 `--limit-rows` 试跑）
+2. `python tools/miniqmt_etl/etl_sqlite_bars_to_duckdb.py`（大库可先用 `--limit-rows` 试跑；**全量请用默认分块**，勿省略 `--chunk-rows` 导致 OOM）
 3. `python tools/miniqmt_etl/validate_miniqmt_etl.py`
 4. 可选 `--sync-dwd-daily` 后见 [BACKTEST_SMOKE.md](BACKTEST_SMOKE.md)
 
@@ -26,6 +26,18 @@
 
 - SilverM 回测引擎与手续费、复权、**pct_chg 缺失** 等口径可能与 `auto_iterate_v4` 不一致；**不要求**数值逐笔一致。
 - 对比时记录：数据源（miniqmt_sqlite）、区间、标的数、是否仅日线层回测。
+
+## 全量 ETL 与校验（本 fork 已跑通示例）
+
+- `bars_compat` 与源库 `bars` 行数一致（约 7225 万行，含 1d/5m/60m）；`validate_miniqmt_etl.py --periods "1d,5m,60m"` 应全部 **OK**。
+- `dwd_daily_price` 中 `data_source=miniqmt_sqlite` 行数与源库 `period=1d` 一致；**pct_chg** 在 ETL 中为 **NULL**（回测策略若依赖需后续在 ETL 中补 `LAG`）。
+- 大库请使用默认 **`--chunk-rows`** 分块导入，避免 pandas 一次性 `MemoryError`。
+
+## 数据权威（迁移期约定）
+
+- **分钟 / 多周期 K 线**：研究侧以 DuckDB **`bars_compat`** 为准（与源 `miniqmt.sqlite` 行级一致，见 `validate_miniqmt_etl.py`）。
+- **日线（SilverM 回测默认读 `dwd_daily_price`）**：执行 `--sync-dwd-daily` 后，以 **`data_source=miniqmt_sqlite`** 行为准；与源 `bars` 中 `period=1d` 行数一致。**pct_chg** 当前为 NULL；与上游 tushare 拉数可能并存，查询时按 `data_source` 区分。
+- **继续增量下载**：若仍用 Vnpy_Yue `download_bars_to_db.py` 写 SQLite，需 **定期再跑 ETL** 同步到 DuckDB，或后续改为直连 DuckDB（未实现）。
 
 ## 实盘
 

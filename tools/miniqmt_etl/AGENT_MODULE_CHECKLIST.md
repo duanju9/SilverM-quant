@@ -34,7 +34,8 @@
 
 ## M6 回测冒烟
 
-- [ ] 若已 `--sync-dwd-daily`：按 `docs/BACKTEST_SMOKE.md` 执行 `run_backtest.py` 或等价查询
+- [ ] `python tools/miniqmt_etl/smoke_duckdb_read.py` exit 0（不依赖策略文件 / pytest）
+- [ ] 若已 `--sync-dwd-daily` 且存在目标策略 py：按 `docs/BACKTEST_SMOKE.md` 执行 `run_backtest.py`
 - [ ] 指标与 Vnpy_Yue walk-forward 的差异已记在 `docs/VNPY_YUE_MIGRATION.md`
 
 ## M7 文档
