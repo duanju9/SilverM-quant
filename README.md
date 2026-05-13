@@ -1,5 +1,7 @@
 # A股量化交易回测系统
 
+> **本仓库（fork）说明**：默认 `origin` 为 [duanju9/SilverM-quant](https://github.com/duanju9/SilverM-quant)，`upstream` 为原作者 [wmaa0002/SilverM-quant](https://github.com/wmaa0002/SilverM-quant)。相对上游的增量与同步方式见 [docs/FORK_UPSTREAM.md](./docs/FORK_UPSTREAM.md)；miniqmt / Vnpy_Yue 数据迁移见 [tools/miniqmt_etl/README.md](./tools/miniqmt_etl/README.md)。
+
 ## 项目简介
 
 agent时代专为A股市场设计的量化交易回测系统。系统支持多数据源获取、多策略信号生成、批量回测，多agent投研分析，dashboard监控。用好agent，实现sliver trading。
@@ -35,6 +37,10 @@ pip install -r requirements.txt
 # 前端依赖
 cd frontend && npm install
 ```
+
+### Vnpy_Yue / miniqmt.sqlite 迁入本仓库（可选）
+
+若你已在本地 **Vnpy_Yue**（或同类）仓库中维护 `miniqmt.sqlite`（含 `bars` 表），可使用 **`tools/miniqmt_etl/`** 迁入 DuckDB（`bars_compat`、可选同步 `dwd_daily_price`）。说明见 [tools/miniqmt_etl/README.md](./tools/miniqmt_etl/README.md) 与 [docs/VNPY_YUE_MIGRATION.md](./docs/VNPY_YUE_MIGRATION.md)。
 
 ### 新用户安装指南
 
